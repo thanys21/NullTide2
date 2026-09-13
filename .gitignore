@@ -1,0 +1,33 @@
+# Unreal: generated files and caches
+/Binaries/
+/Intermediate/
+/Saved/
+/DerivedDataCache/
+
+# Plugin: generated files
+/Plugins/**/Intermediate/
+/Plugins/**/DerivedDataCache/
+
+# Rider and Visual Studio: local settings
+.idea/
+.vs/
+*.sln
+*.slnx
+*.suo
+*.user
+*.VC.db
+*.VC.opendb
+*.code-workspace
+
+# Generated Xcode projects
+*.xcodeproj/
+*.xcworkspace/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+
+# Operating system
+.DS_Store
+Thumbs.db
