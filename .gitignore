@@ -1,33 +1,61 @@
-# Unreal: generated files and caches
+# ============================================================
+# Unreal Engine - generated files and caches
+# ============================================================
+
 /Binaries/
 /Intermediate/
 /Saved/
 /DerivedDataCache/
 
-# Plugin: generated files
+
+# ============================================================
+# Unreal Plugins - generated files
+# Keep plugin Source/ and Content/, ignore build artifacts only
+# ============================================================
+
+/Plugins/**/Binaries/
 /Plugins/**/Intermediate/
 /Plugins/**/DerivedDataCache/
 
-# Rider and Visual Studio: local settings
+
+# ============================================================
+# Visual Studio / Rider / IDE local files
+# ============================================================
+
 .idea/
 .vs/
+
 *.sln
 *.slnx
 *.suo
 *.user
 *.VC.db
 *.VC.opendb
+
 *.code-workspace
 
-# Generated Xcode projects
+.vscode/
+
+# ============================================================
+# Xcode generated projects
+# ============================================================
+
 *.xcodeproj/
 *.xcworkspace/
 
-# Logs and temporary files
+
+# ============================================================
+# Logs / temporary files
+# ============================================================
+
 *.log
 *.tmp
 *.bak
 
+
+# ============================================================
 # Operating system
+# ============================================================
+
 .DS_Store
 Thumbs.db
