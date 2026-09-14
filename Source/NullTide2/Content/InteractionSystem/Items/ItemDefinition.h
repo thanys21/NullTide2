@@ -4,13 +4,15 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
+#include "ItemDefinition.generated.h"
 
 class UInventoryItemFragment;
+class UTexture2D;
 /**
  * 
  */
 UCLASS(Blueprintable, BlueprintType, Abstract, Const)
-class INVENTORYSYSTEM_API UItemDefinition : public UObject
+class NULLTIDE2_API UItemDefinition : public UObject
 {
 	GENERATED_BODY()
 public:
@@ -25,5 +27,5 @@ public:
 	TObjectPtr<UTexture2D> ItemIcon;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Fragments Array")
-	TArray<TIsTObjectPtr<UInventoryItemFragment>> Fragments;
+	TArray<TObjectPtr<UInventoryItemFragment>> Fragments;
 };
