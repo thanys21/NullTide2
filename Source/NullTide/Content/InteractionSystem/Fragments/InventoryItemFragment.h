@@ -2,15 +2,14 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
-#include "UObject/Object.h"
+#include "ItemFragment.h"
 #include "InventoryItemFragment.generated.h"
 
 /**
  *
  */
-UCLASS(Blueprintable, BlueprintType, Abstract, DefaultToInstanced, EditInlineNew)
-class NULLTIDE_API UInventoryItemFragment : public UObject
+UCLASS(Blueprintable, BlueprintType, Abstract, Const, DefaultToInstanced, EditInlineNew)
+class NULLTIDE_API UInventoryItemFragment : public UItemFragment
 {
 	GENERATED_BODY()
 };
