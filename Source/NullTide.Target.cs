@@ -3,13 +3,13 @@
 using UnrealBuildTool;
 using System.Collections.Generic;
 
-public class NullTide2Target : TargetRules
+public class NullTideTarget : TargetRules
 {
-	public NullTide2Target(TargetInfo Target) : base(Target)
+	public NullTideTarget(TargetInfo Target) : base(Target)
 	{
 		Type = TargetType.Game;
 		DefaultBuildSettings = BuildSettingsVersion.V7;
 
-		ExtraModuleNames.AddRange( new string[] { "NullTide2" } );
+		ExtraModuleNames.AddRange( new string[] { "NullTide" } );
 	}
 }

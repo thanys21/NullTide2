@@ -12,7 +12,7 @@ class UTexture2D;
  * 
  */
 UCLASS(Blueprintable, BlueprintType, Abstract, Const)
-class NULLTIDE2_API UItemDefinition : public UObject
+class NULLTIDE_API UItemDefinition : public UObject
 {
 	GENERATED_BODY()
 public:
