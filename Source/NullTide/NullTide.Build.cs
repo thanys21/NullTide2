@@ -2,9 +2,9 @@
 
 using UnrealBuildTool;
 
-public class NullTide2 : ModuleRules
+public class NullTide : ModuleRules
 {
-	public NullTide2(ReadOnlyTargetRules Target) : base(Target)
+	public NullTide(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	

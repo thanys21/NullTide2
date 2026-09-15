@@ -3,13 +3,13 @@
 using UnrealBuildTool;
 using System.Collections.Generic;
 
-public class NullTide2EditorTarget : TargetRules
+public class NullTideEditorTarget : TargetRules
 {
-	public NullTide2EditorTarget(TargetInfo Target) : base(Target)
+	public NullTideEditorTarget(TargetInfo Target) : base(Target)
 	{
 		Type = TargetType.Editor;
 		DefaultBuildSettings = BuildSettingsVersion.V7;
 
-		ExtraModuleNames.AddRange( new string[] { "NullTide2" } );
+		ExtraModuleNames.AddRange( new string[] { "NullTide" } );
 	}
 }

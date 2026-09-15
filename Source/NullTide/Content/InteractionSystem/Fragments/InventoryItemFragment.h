@@ -10,7 +10,7 @@
  *
  */
 UCLASS(Blueprintable, BlueprintType, Abstract, DefaultToInstanced, EditInlineNew)
-class NULLTIDE2_API UInventoryItemFragment : public UObject
+class NULLTIDE_API UInventoryItemFragment : public UObject
 {
 	GENERATED_BODY()
 };
