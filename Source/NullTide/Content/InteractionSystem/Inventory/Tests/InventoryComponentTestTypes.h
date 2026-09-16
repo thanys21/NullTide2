@@ -5,9 +5,21 @@
 #include "CoreMinimal.h"
 #include "../InventoryTypes.h"
 #include "../../Items/ItemDefinition.h"
+#include "Components/ActorComponent.h"
 #include "InventoryComponentTestTypes.generated.h"
 
 class UInventoryComponent;
+
+/** Legacy array fixture used only by native compatibility automation tests. */
+UCLASS(Transient, NotBlueprintable)
+class UInventoryLegacyTestManager : public UActorComponent
+{
+	GENERATED_BODY()
+
+public:
+	UPROPERTY()
+	TArray<TSubclassOf<UItemDefinition>> InventoryItems;
+};
 
 /** Concrete definition used only by native inventory automation tests. */
 UCLASS(Transient, NotBlueprintable)
