@@ -8,6 +8,15 @@
 
 class UItemInstance;
 
+UENUM(BlueprintType)
+enum class EInventoryInitializationState : uint8
+{
+	NotRequired,
+	PendingLegacyImport,
+	NativeReady,
+	Failed
+};
+
 UENUM(BlueprintType, meta = (ScriptName = "InventoryOperationResultCode"))
 enum class EInventoryOperationResult : uint8
 {

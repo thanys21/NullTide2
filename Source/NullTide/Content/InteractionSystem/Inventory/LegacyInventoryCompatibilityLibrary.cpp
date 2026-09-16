@@ -2,6 +2,10 @@
 
 #include "LegacyInventoryCompatibilityLibrary.h"
 
+#include "InventoryComponent.h"
+#include "LegacyInventoryStorage.h"
+#include "../Items/ItemInstance.h"
+
 #include "../Fragments/InventoryItemFragment.h"
 #include "../Items/ItemDefinition.h"
 #include "Components/ActorComponent.h"
@@ -10,7 +14,6 @@
 
 namespace
 {
-const FName LegacyItemsPropertyName(TEXT("InventoryItems"));
 TSet<TWeakObjectPtr<UActorComponent>> ActiveLegacyMutations;
 
 FInventoryOperationResult MakeLegacyResult(EInventoryOperationResult Result)
@@ -59,11 +62,7 @@ bool FindLegacyArray(
 	FArrayProperty*& OutArrayProperty,
 	FClassProperty*& OutClassProperty)
 {
-	OutArrayProperty = FindFProperty<FArrayProperty>(LegacyInventory->GetClass(), LegacyItemsPropertyName);
-	OutClassProperty = OutArrayProperty ? CastField<FClassProperty>(OutArrayProperty->Inner) : nullptr;
-	return OutClassProperty
-		&& OutClassProperty->MetaClass
-		&& OutClassProperty->MetaClass->IsChildOf(UItemDefinition::StaticClass());
+	return LegacyInventoryStorage::FindArray(LegacyInventory, OutArrayProperty, OutClassProperty);
 }
 }
 
@@ -74,6 +73,22 @@ FInventoryOperationResult ULegacyInventoryCompatibilityLibrary::TryAddDefinition
 	if (!IsLegacyReceiverUsable(LegacyInventory))
 	{
 		return MakeLegacyResult(EInventoryOperationResult::NotInitialized);
+	}
+
+	if (UInventoryComponent* NativeInventory = Cast<UInventoryComponent>(LegacyInventory))
+	{
+		if (!NativeInventory->IsLegacyInventoryMode())
+		{
+			if (NativeInventory->GetInitializationState() != EInventoryInitializationState::NativeReady)
+			{
+				return MakeLegacyResult(EInventoryOperationResult::NotInitialized);
+			}
+			return NativeInventory->TryAddDefinition(DefinitionClass);
+		}
+		if (NativeInventory->ShouldBlockLegacyWrites())
+		{
+			return MakeLegacyResult(EInventoryOperationResult::NotInitialized);
+		}
 	}
 
 	if (ActiveLegacyMutations.Contains(LegacyInventory))
@@ -120,6 +135,30 @@ TArray<TSubclassOf<UItemDefinition>> ULegacyInventoryCompatibilityLibrary::GetLe
 	{
 		Result = EInventoryOperationResult::NotInitialized;
 		return Snapshot;
+	}
+
+	if (UInventoryComponent* NativeInventory = Cast<UInventoryComponent>(LegacyInventory))
+	{
+		if (!NativeInventory->IsLegacyInventoryMode())
+		{
+			if (NativeInventory->GetInitializationState() != EInventoryInitializationState::NativeReady
+				|| !NativeInventory->IsNativeAuthorityActive())
+			{
+				Result = EInventoryOperationResult::NotInitialized;
+				return Snapshot;
+			}
+			for (const UItemInstance* Item : NativeInventory->GetItemsSnapshot())
+			{
+				Snapshot.Add(Item->GetDefinitionClass());
+			}
+			Result = EInventoryOperationResult::Success;
+			return Snapshot;
+		}
+		if (NativeInventory->ShouldBlockLegacyWrites())
+		{
+			Result = EInventoryOperationResult::NotInitialized;
+			return Snapshot;
+		}
 	}
 
 	FArrayProperty* ArrayProperty = nullptr;

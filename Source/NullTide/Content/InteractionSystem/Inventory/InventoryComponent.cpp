@@ -2,6 +2,9 @@
 
 #include "InventoryComponent.h"
 
+#include "LegacyInventoryStorage.h"
+#include "UObject/StrongObjectPtr.h"
+
 #include "../Fragments/InventoryItemFragment.h"
 #include "../Items/ItemDefinition.h"
 #include "../Items/ItemInstance.h"
@@ -24,6 +27,112 @@ FInventoryOperationResult MakeInventoryResult(
 UInventoryComponent::UInventoryComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
+}
+
+void UInventoryComponent::BeginPlay()
+{
+	if (bImportLegacyInventoryOnBeginPlay)
+	{
+		const FInventoryOperationResult Result = InitializeFromLegacyInventory();
+		if (!Result.IsSuccess())
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Inventory seed import failed for %s (result %d); writes remain blocked."),
+				*GetPathName(), static_cast<int32>(Result.Result));
+		}
+	}
+	Super::BeginPlay();
+}
+
+EInventoryInitializationState UInventoryComponent::GetInitializationState() const
+{
+	if (InitializationState == EInventoryInitializationState::NotRequired
+		&& (bLegacyInventoryMode || bImportLegacyInventoryOnBeginPlay))
+	{
+		return EInventoryInitializationState::PendingLegacyImport;
+	}
+	return InitializationState;
+}
+
+FInventoryOperationResult UInventoryComponent::InitializeFromLegacyInventory()
+{
+	if (HasAnyFlags(RF_ClassDefaultObject | RF_BeginDestroyed | RF_FinishDestroyed))
+	{
+		return MakeInventoryResult(EInventoryOperationResult::NotInitialized);
+	}
+	if (bMutationInProgress)
+	{
+		return MakeInventoryResult(EInventoryOperationResult::Busy);
+	}
+	if (InitializationState == EInventoryInitializationState::NativeReady)
+	{
+		return MakeInventoryResult(EInventoryOperationResult::Success);
+	}
+	if (InitializationState == EInventoryInitializationState::Failed)
+	{
+		return MakeInventoryResult(LastInitializationResult);
+	}
+	if (!bLegacyInventoryMode)
+	{
+		return MakeInventoryResult(EInventoryOperationResult::NotInitialized);
+	}
+
+	TGuardValue<bool> MutationGuard(bMutationInProgress, true);
+	auto FailImport = [this](EInventoryOperationResult Result)
+	{
+		InitializationState = EInventoryInitializationState::Failed;
+		LastInitializationResult = Result;
+		return MakeInventoryResult(Result);
+	};
+	FArrayProperty* ArrayProperty = nullptr;
+	FClassProperty* ClassProperty = nullptr;
+	if (!Items.IsEmpty() || Revision != 0
+		|| !LegacyInventoryStorage::FindArray(this, ArrayProperty, ClassProperty))
+	{
+		return FailImport(EInventoryOperationResult::NotInitialized);
+	}
+	const TArray<TSubclassOf<UItemDefinition>> Seed =
+		LegacyInventoryStorage::ReadArray(this, ArrayProperty, ClassProperty);
+	for (const TSubclassOf<UItemDefinition>& DefinitionClass : Seed)
+	{
+		UClass* Definition = DefinitionClass.Get();
+		if (!Definition || Definition->HasAnyClassFlags(CLASS_Abstract | CLASS_Deprecated | CLASS_NewerVersionExists)
+			|| !Definition->IsChildOf(ClassProperty->MetaClass))
+		{
+			return FailImport(EInventoryOperationResult::InvalidDefinition);
+		}
+		if (!IsDefinitionDataValid(Cast<UItemDefinition>(Definition->GetDefaultObject())))
+		{
+			return FailImport(EInventoryOperationResult::InvalidDefinitionData);
+		}
+	}
+
+	TArray<TStrongObjectPtr<UItemInstance>> StagedReferences;
+	TArray<TObjectPtr<UItemInstance>> ImportedItems;
+	TSet<FGuid> ImportedIds;
+	ImportedItems.Reserve(Seed.Num());
+	StagedReferences.Reserve(Seed.Num());
+	for (const TSubclassOf<UItemDefinition>& DefinitionClass : Seed)
+	{
+		FGuid ItemId;
+		do { ItemId = FGuid::NewGuid(); } while (!ItemId.IsValid() || ImportedIds.Contains(ItemId));
+		UItemInstance* Item = NewObject<UItemInstance>(this);
+		StagedReferences.Emplace(Item);
+		if (!Item || !Item->Initialize(ItemId, DefinitionClass))
+		{
+			return FailImport(EInventoryOperationResult::InvalidDefinitionData);
+		}
+		ImportedIds.Add(ItemId);
+		ImportedItems.Add(Item);
+	}
+
+	Items = MoveTemp(ImportedItems);
+	RebuildLegacyProjection(ArrayProperty, ClassProperty);
+	bLegacyInventoryMode = false;
+	InitializationState = EInventoryInitializationState::NativeReady;
+	LastInitializationResult = EInventoryOperationResult::Success;
+	++Revision;
+	OnInventoryChanged.Broadcast(Revision);
+	return MakeInventoryResult(EInventoryOperationResult::Success);
 }
 
 FInventoryOperationResult UInventoryComponent::TryAddDefinition(
@@ -57,6 +166,20 @@ FInventoryOperationResult UInventoryComponent::TryAddDefinition(
 		return MakeInventoryResult(EInventoryOperationResult::InvalidDefinitionData);
 	}
 
+	FArrayProperty* ProjectionArray = nullptr;
+	FClassProperty* ProjectionClass = nullptr;
+	if (InitializationState == EInventoryInitializationState::NativeReady)
+	{
+		if (!LegacyInventoryStorage::FindArray(this, ProjectionArray, ProjectionClass))
+		{
+			return MakeInventoryResult(EInventoryOperationResult::NotInitialized);
+		}
+		if (!DefinitionUClass->IsChildOf(ProjectionClass->MetaClass))
+		{
+			return MakeInventoryResult(EInventoryOperationResult::InvalidDefinition);
+		}
+	}
+
 	FGuid NewItemId;
 	do
 	{
@@ -71,6 +194,10 @@ FInventoryOperationResult UInventoryComponent::TryAddDefinition(
 	}
 
 	Items.Add(NewItem);
+	if (ProjectionArray)
+	{
+		RebuildLegacyProjection(ProjectionArray, ProjectionClass);
+	}
 	++Revision;
 
 	const FInventoryOperationResult Result = MakeInventoryResult(
@@ -110,8 +237,20 @@ FInventoryOperationResult UInventoryComponent::TryRemoveItem(FGuid ItemId)
 		return MakeInventoryResult(EInventoryOperationResult::InvalidItemId, nullptr, ItemId);
 	}
 
+	FArrayProperty* ProjectionArray = nullptr;
+	FClassProperty* ProjectionClass = nullptr;
+	if (InitializationState == EInventoryInitializationState::NativeReady
+		&& !LegacyInventoryStorage::FindArray(this, ProjectionArray, ProjectionClass))
+	{
+		return MakeInventoryResult(EInventoryOperationResult::NotInitialized, nullptr, ItemId);
+	}
+
 	UItemInstance* RemovedItem = Items[ItemIndex];
 	Items.RemoveAt(ItemIndex);
+	if (ProjectionArray)
+	{
+		RebuildLegacyProjection(ProjectionArray, ProjectionClass);
+	}
 	++Revision;
 
 	const FInventoryOperationResult Result = MakeInventoryResult(
@@ -155,7 +294,21 @@ bool UInventoryComponent::ContainsItem(FGuid ItemId) const
 
 bool UInventoryComponent::CanOperate() const
 {
-	return !bLegacyInventoryMode && !HasAnyFlags(RF_ClassDefaultObject | RF_BeginDestroyed | RF_FinishDestroyed);
+	return !bLegacyInventoryMode
+		&& (!bImportLegacyInventoryOnBeginPlay || InitializationState == EInventoryInitializationState::NativeReady)
+		&& InitializationState != EInventoryInitializationState::Failed
+		&& !HasAnyFlags(RF_ClassDefaultObject | RF_BeginDestroyed | RF_FinishDestroyed);
+}
+
+void UInventoryComponent::RebuildLegacyProjection(FArrayProperty* ArrayProperty, FClassProperty* ClassProperty)
+{
+	TArray<TSubclassOf<UItemDefinition>> Definitions;
+	Definitions.Reserve(Items.Num());
+	for (const UItemInstance* Item : Items)
+	{
+		Definitions.Add(Item->GetDefinitionClass());
+	}
+	LegacyInventoryStorage::WriteArray(this, ArrayProperty, ClassProperty, Definitions);
 }
 
 bool UInventoryComponent::IsDefinitionDataValid(const UItemDefinition* Definition) const

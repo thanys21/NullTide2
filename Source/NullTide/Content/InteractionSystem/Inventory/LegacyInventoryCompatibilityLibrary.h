@@ -10,7 +10,7 @@
 class UActorComponent;
 class UItemDefinition;
 
-/** Temporary transaction and query boundary for the legacy Blueprint inventory array. */
+/** Compatibility boundary: legacy rollback writes before cutover, native transactions/queries afterward. */
 UCLASS()
 class NULLTIDE_API ULegacyInventoryCompatibilityLibrary : public UBlueprintFunctionLibrary
 {

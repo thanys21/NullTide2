@@ -9,6 +9,8 @@
 
 class UItemDefinition;
 class UItemInstance;
+class FArrayProperty;
+class FClassProperty;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnInventoryChanged, int32, NewRevision);
 
@@ -46,13 +48,35 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Inventory|Compatibility")
 	bool IsLegacyInventoryMode() const { return bLegacyInventoryMode; }
 
+	/** Imports the serialized legacy seed once. A failed attempt requires a fresh instance. */
+	UFUNCTION(BlueprintCallable, Category = "Inventory|Compatibility")
+	FInventoryOperationResult InitializeFromLegacyInventory();
+
+	UFUNCTION(BlueprintPure, Category = "Inventory|Compatibility")
+	EInventoryInitializationState GetInitializationState() const;
+
+	UFUNCTION(BlueprintPure, Category = "Inventory|Compatibility")
+	EInventoryOperationResult GetLastInitializationResult() const { return LastInitializationResult; }
+
+	UFUNCTION(BlueprintPure, Category = "Inventory|Compatibility")
+	bool IsNativeAuthorityActive() const { return CanOperate(); }
+
+	bool ShouldBlockLegacyWrites() const
+	{
+		return bImportLegacyInventoryOnBeginPlay || InitializationState == EInventoryInitializationState::Failed;
+	}
+
 	UPROPERTY(BlueprintAssignable, Category = "Inventory")
 	FOnInventoryChanged OnInventoryChanged;
+
+protected:
+	virtual void BeginPlay() override;
 
 private:
 	bool CanOperate() const;
 	bool IsDefinitionDataValid(const UItemDefinition* Definition) const;
 	bool HasItemId(const FGuid& ItemId) const;
+	void RebuildLegacyProjection(FArrayProperty* ArrayProperty, FClassProperty* ClassProperty);
 
 	UPROPERTY()
 	TArray<TObjectPtr<UItemInstance>> Items;
@@ -62,6 +86,15 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory|Compatibility", meta = (AllowPrivateAccess = "true"))
 	bool bLegacyInventoryMode = false;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory|Compatibility", meta = (AllowPrivateAccess = "true"))
+	bool bImportLegacyInventoryOnBeginPlay = false;
+
+	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, Category = "Inventory|Compatibility", meta = (AllowPrivateAccess = "true"))
+	EInventoryInitializationState InitializationState = EInventoryInitializationState::NotRequired;
+
+	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, Category = "Inventory|Compatibility", meta = (AllowPrivateAccess = "true"))
+	EInventoryOperationResult LastInitializationResult = EInventoryOperationResult::NotInitialized;
 
 	bool bMutationInProgress = false;
 };

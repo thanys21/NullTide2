@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "../InventoryTypes.h"
+#include "../InventoryComponent.h"
 #include "../../Items/ItemDefinition.h"
 #include "Components/ActorComponent.h"
 #include "InventoryComponentTestTypes.generated.h"
@@ -19,6 +20,30 @@ class UInventoryLegacyTestManager : public UActorComponent
 public:
 	UPROPERTY()
 	TArray<TSubclassOf<UItemDefinition>> InventoryItems;
+};
+
+/** Native-subclass legacy seed fixture for atomic cutover tests. */
+UCLASS(Transient, NotBlueprintable)
+class UInventoryCutoverTestManager : public UInventoryComponent
+{
+	GENERATED_BODY()
+public:
+	UPROPERTY()
+	TArray<TSubclassOf<UItemDefinition>> InventoryItems;
+};
+
+UCLASS(Transient, NotBlueprintable)
+class UInventoryOtherTestItemDefinition : public UItemDefinition
+{
+	GENERATED_BODY()
+};
+
+UCLASS(Transient, NotBlueprintable)
+class UInventoryInvalidDataTestDefinition : public UItemDefinition
+{
+	GENERATED_BODY()
+public:
+	UInventoryInvalidDataTestDefinition() { Fragments.Add(nullptr); }
 };
 
 /** Concrete definition used only by native inventory automation tests. */
@@ -46,4 +71,8 @@ public:
 	int32 EventCount = 0;
 	int32 LastRevision = 0;
 	bool bAttemptReentrantMutation = false;
+	bool bAttemptReentrantInitialization = false;
+	FInventoryOperationResult ReentrantInitializationResult;
+	int32 ObservedItemCount = 0;
+	TArray<TSubclassOf<UItemDefinition>> ObservedDefinitions;
 };

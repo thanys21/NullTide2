@@ -3,6 +3,7 @@
 #include "InventoryComponentTestTypes.h"
 
 #include "../InventoryComponent.h"
+#include "../LegacyInventoryCompatibilityLibrary.h"
 #include "../../Items/ItemInstance.h"
 #include "Misc/AutomationTest.h"
 #include "UObject/StrongObjectPtr.h"
@@ -13,6 +14,16 @@ void UInventoryComponentTestListener::HandleInventoryChanged(int32 NewRevision)
 {
 	++EventCount;
 	LastRevision = NewRevision;
+	if (Inventory)
+	{
+		ObservedItemCount = Inventory->GetItemCount();
+		EInventoryOperationResult QueryResult;
+		ObservedDefinitions = ULegacyInventoryCompatibilityLibrary::GetLegacyItemsSnapshot(Inventory, QueryResult);
+		if (bAttemptReentrantInitialization)
+		{
+			ReentrantInitializationResult = Inventory->InitializeFromLegacyInventory();
+		}
+	}
 
 	if (bAttemptReentrantMutation && Inventory)
 	{
@@ -258,6 +269,13 @@ bool FInventoryReparentedBlueprintTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Manager has the intended direct parent"), ManagerClass->GetSuperClass(), UInventoryComponent::StaticClass());
 	const TStrongObjectPtr<UInventoryComponent> Inventory(
 		NewObject<UInventoryComponent>(GetTransientPackage(), ManagerClass));
+	// Keep the M3 rollback contract under test while production opts into M4 at BeginPlay.
+	FBoolProperty* AutoImport = FindFProperty<FBoolProperty>(ManagerClass, TEXT("bImportLegacyInventoryOnBeginPlay"));
+	if (!TestNotNull(TEXT("Controlled auto-import setting is reflected"), AutoImport))
+	{
+		return false;
+	}
+	AutoImport->SetPropertyValue_InContainer(Inventory.Get(), false);
 	TestTrue(TEXT("Existing manager defaults disable native authority"), Inventory->IsLegacyInventoryMode());
 	FArrayProperty* LegacyItems = FindFProperty<FArrayProperty>(ManagerClass, TEXT("InventoryItems"));
 	UFunction* AddItem = ManagerClass->FindFunctionByName(TEXT("AddItem"));
