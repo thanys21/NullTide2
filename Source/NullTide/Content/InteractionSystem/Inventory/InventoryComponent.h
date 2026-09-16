@@ -42,6 +42,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Inventory")
 	int32 GetRevision() const { return Revision; }
 
+	/** Legacy Blueprint subclasses keep their existing array authoritative until cutover. */
+	UFUNCTION(BlueprintPure, Category = "Inventory|Compatibility")
+	bool IsLegacyInventoryMode() const { return bLegacyInventoryMode; }
+
 	UPROPERTY(BlueprintAssignable, Category = "Inventory")
 	FOnInventoryChanged OnInventoryChanged;
 
@@ -55,6 +59,9 @@ private:
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Inventory", meta = (AllowPrivateAccess = "true"))
 	int32 Revision = 0;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory|Compatibility", meta = (AllowPrivateAccess = "true"))
+	bool bLegacyInventoryMode = false;
 
 	bool bMutationInProgress = false;
 };

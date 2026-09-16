@@ -6,6 +6,8 @@
 #include "../../Items/ItemInstance.h"
 #include "Misc/AutomationTest.h"
 #include "UObject/StrongObjectPtr.h"
+#include "UObject/StructOnScope.h"
+#include "UObject/UnrealType.h"
 
 void UInventoryComponentTestListener::HandleInventoryChanged(int32 NewRevision)
 {
@@ -207,6 +209,93 @@ bool FInventoryReentrantMutationTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Reentrant attempt does not add membership"), Inventory->GetItemCount(), 1);
 	TestEqual(TEXT("Reentrant attempt does not increment revision"), Inventory->GetRevision(), 1);
 	TestEqual(TEXT("Reentrant attempt does not emit another event"), Listener->EventCount, 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FInventoryLegacyModeTest,
+	"NullTide.Inventory.M3.LegacyModeRejectsNativeMutations",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FInventoryLegacyModeTest::RunTest(const FString& Parameters)
+{
+	const TStrongObjectPtr<UInventoryComponent> Inventory = MakeInventory();
+	FBoolProperty* LegacyMode = FindFProperty<FBoolProperty>(
+		UInventoryComponent::StaticClass(), TEXT("bLegacyInventoryMode"));
+	if (!TestNotNull(TEXT("Legacy-mode default is reflected"), LegacyMode))
+	{
+		return false;
+	}
+	LegacyMode->SetPropertyValue_InContainer(Inventory.Get(), true);
+	const TStrongObjectPtr<UInventoryComponentTestListener> Listener(
+		NewObject<UInventoryComponentTestListener>(GetTransientPackage()));
+	Inventory->OnInventoryChanged.AddDynamic(Listener.Get(), &UInventoryComponentTestListener::HandleInventoryChanged);
+
+	TestTrue(TEXT("Legacy mode is enabled"), Inventory->IsLegacyInventoryMode());
+	TestTrue(TEXT("Native add is disabled in legacy mode"),
+		Inventory->TryAddDefinition(UInventoryTestItemDefinition::StaticClass()).Result == EInventoryOperationResult::NotInitialized);
+	TestTrue(TEXT("Native remove is disabled in legacy mode"),
+		Inventory->TryRemoveItem(FGuid::NewGuid()).Result == EInventoryOperationResult::NotInitialized);
+	TestEqual(TEXT("Native membership stays empty"), Inventory->GetItemsSnapshot().Num(), 0);
+	TestEqual(TEXT("Native revision stays zero"), Inventory->GetRevision(), 0);
+	TestEqual(TEXT("Rejected native mutations emit no event"), Listener->EventCount, 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FInventoryReparentedBlueprintTest,
+	"NullTide.Inventory.M3.ReparentedBlueprintKeepsLegacyAuthority",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FInventoryReparentedBlueprintTest::RunTest(const FString& Parameters)
+{
+	UClass* ManagerClass = LoadClass<UInventoryComponent>(nullptr,
+		TEXT("/Game/LevelPrototyping/InventorySystem/InventoryManagerComponent.InventoryManagerComponent_C"));
+	if (!TestNotNull(TEXT("Existing manager loads as a native inventory subclass"), ManagerClass))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Manager has the intended direct parent"), ManagerClass->GetSuperClass(), UInventoryComponent::StaticClass());
+	const TStrongObjectPtr<UInventoryComponent> Inventory(
+		NewObject<UInventoryComponent>(GetTransientPackage(), ManagerClass));
+	TestTrue(TEXT("Existing manager defaults disable native authority"), Inventory->IsLegacyInventoryMode());
+	FArrayProperty* LegacyItems = FindFProperty<FArrayProperty>(ManagerClass, TEXT("InventoryItems"));
+	UFunction* AddItem = ManagerClass->FindFunctionByName(TEXT("AddItem"));
+	if (!TestNotNull(TEXT("Legacy InventoryItems remains reflected"), LegacyItems)
+		|| !TestNotNull(TEXT("Legacy AddItem remains callable"), AddItem))
+	{
+		return false;
+	}
+	FClassProperty* DefinitionParameter = FindFProperty<FClassProperty>(AddItem, TEXT("ItemDefinitions"));
+	if (!TestNotNull(TEXT("AddItem retains its ItemDefinitions class parameter"), DefinitionParameter))
+	{
+		return false;
+	}
+	FScriptArrayHelper LegacyArray(LegacyItems, LegacyItems->ContainerPtrToValuePtr<void>(Inventory.Get()));
+	TestEqual(TEXT("Legacy default inventory is still empty"), LegacyArray.Num(), 0);
+	for (const TCHAR* DefinitionPath : {
+		TEXT("/Game/LevelPrototyping/InventorySystem/Items/Item_Wood.Item_Wood_C"),
+		TEXT("/Game/LevelPrototyping/InventorySystem/Items/Item_Sword.Item_Sword_C") })
+	{
+		UClass* DefinitionClass = LoadClass<UItemDefinition>(nullptr, DefinitionPath);
+		if (!TestNotNull(TEXT("Existing item definition loads"), DefinitionClass))
+		{
+			return false;
+		}
+		TestTrue(TEXT("Native add cannot create a second store"),
+			Inventory->TryAddDefinition(DefinitionClass).Result == EInventoryOperationResult::NotInitialized);
+		FStructOnScope Arguments(AddItem);
+		DefinitionParameter->SetObjectPropertyValue_InContainer(Arguments.GetStructMemory(), DefinitionClass);
+		const int32 PreviousCount = LegacyArray.Num();
+		Inventory->ProcessEvent(AddItem, Arguments.GetStructMemory());
+		TestEqual(TEXT("Legacy AddItem appends exactly one entry"),
+			LegacyArray.Num(), PreviousCount + 1);
+	}
+	TestEqual(TEXT("Wood and Sword are retained by the legacy store"), LegacyArray.Num(), 2);
+	TestEqual(TEXT("Native Items stays empty"), Inventory->GetItemCount(), 0);
+	TestEqual(TEXT("Native revision stays zero"), Inventory->GetRevision(), 0);
+	TestTrue(TEXT("Native removal remains disabled"),
+		Inventory->TryRemoveItem(FGuid::NewGuid()).Result == EInventoryOperationResult::NotInitialized);
 	return true;
 }
 

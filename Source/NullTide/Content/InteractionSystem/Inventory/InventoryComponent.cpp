@@ -155,7 +155,7 @@ bool UInventoryComponent::ContainsItem(FGuid ItemId) const
 
 bool UInventoryComponent::CanOperate() const
 {
-	return !HasAnyFlags(RF_ClassDefaultObject | RF_BeginDestroyed | RF_FinishDestroyed);
+	return !bLegacyInventoryMode && !HasAnyFlags(RF_ClassDefaultObject | RF_BeginDestroyed | RF_FinishDestroyed);
 }
 
 bool UInventoryComponent::IsDefinitionDataValid(const UItemDefinition* Definition) const
