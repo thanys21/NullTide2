@@ -6,7 +6,6 @@
 #include "LegacyInventoryStorage.h"
 #include "../Items/ItemInstance.h"
 
-#include "../Fragments/InventoryItemFragment.h"
 #include "../Items/ItemDefinition.h"
 #include "Components/ActorComponent.h"
 #include "Misc/ScopeExit.h"
@@ -47,14 +46,8 @@ bool IsDefinitionDataValid(TSubclassOf<UItemDefinition> DefinitionClass)
 		return false;
 	}
 
-	for (const UInventoryItemFragment* Fragment : Definition->Fragments)
-	{
-		if (!IsValid(Fragment))
-		{
-			return false;
-		}
-	}
-	return true;
+	FString Diagnostic;
+	return Definition->ValidateFragments(Diagnostic);
 }
 
 bool FindLegacyArray(

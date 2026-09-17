@@ -5,7 +5,6 @@
 #include "LegacyInventoryStorage.h"
 #include "UObject/StrongObjectPtr.h"
 
-#include "../Fragments/InventoryItemFragment.h"
 #include "../Items/ItemDefinition.h"
 #include "../Items/ItemInstance.h"
 
@@ -318,15 +317,8 @@ bool UInventoryComponent::IsDefinitionDataValid(const UItemDefinition* Definitio
 		return false;
 	}
 
-	for (const UInventoryItemFragment* Fragment : Definition->Fragments)
-	{
-		if (!IsValid(Fragment))
-		{
-			return false;
-		}
-	}
-
-	return true;
+	FString Diagnostic;
+	return Definition->ValidateFragments(Diagnostic);
 }
 
 bool UInventoryComponent::HasItemId(const FGuid& ItemId) const

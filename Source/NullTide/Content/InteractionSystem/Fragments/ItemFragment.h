@@ -11,4 +11,8 @@ UCLASS(Blueprintable, BlueprintType, Abstract, Const, DefaultToInstanced, EditIn
 class NULLTIDE_API UItemFragment : public UObject
 {
 	GENERATED_BODY()
+
+public:
+	/** Pure static-data validation. Never mutate shared definition templates here. */
+	virtual bool ValidateTemplate(FString& OutDiagnostic) const;
 };
